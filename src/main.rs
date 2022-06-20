@@ -1,10 +1,7 @@
-
 mod core;
+mod debug;
 use crate::core::Core;
 
 fn main() {
-
-    let core = Core::build("hello");
-    core.burn();
-
+   Core::burn(Core::build("hello",winit::event_loop::EventLoop::new()));
 }
