@@ -12,12 +12,14 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
 use std::ptr;
 
-use crate::debug::{check_validation_layer_support, ValidationInfo, VALIDATION};
+use crate::debug::{check_validation_layer_support, ValidationInfo, VALIDATION, setup_debug_messenger, destroy_debug_messenger, populate_debug_messenger_create_info};
 
 pub struct Core {
     window: winit::window::Window,
     entry: Entry,
     instance: ash::Instance,
+    debug_utils_messenger: Option<vk::DebugUtilsMessengerEXT>,
+
 }
 
 impl Core {
@@ -33,16 +35,18 @@ impl Core {
             .build(&event_loop)
             .unwrap();
         let entry = Entry::new().unwrap();
+        let instance = Core::create_instance(&entry);
         (
             Core {
+                debug_utils_messenger: setup_debug_messenger(&entry, &instance),
                 window,
-                instance: Core::create_instance(&entry),
+                instance,
                 entry,
+              
             },
             event_loop,
         )
     }
-
     fn create_instance(entry: &Entry) -> ash::Instance {
         if VALIDATION.is_enable && check_validation_layer_support(entry) == false {
             panic!("Validation layers requested, but not available!");
@@ -91,7 +95,13 @@ impl Core {
             } else {
                 0
             } as u32,
-
+            p_next : if VALIDATION.is_enable {
+                &populate_debug_messenger_create_info() 
+                as *const vk::DebugUtilsMessengerCreateInfoEXT 
+                as *const c_void
+            } else {
+                ptr::null()
+            },
             ..Default::default()
         };
         let instance = unsafe { entry.create_instance(&create_info, None).unwrap() };
@@ -141,6 +151,7 @@ impl Core {
 impl Drop for Core {
     fn drop(&mut self) {
         unsafe {
+            destroy_debug_messenger(&self.entry,&self.instance,self.debug_utils_messenger);
             self.instance.destroy_instance(None);
         }
     }
