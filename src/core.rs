@@ -1,6 +1,6 @@
 use winit;
 
-use ash::extensions::{khr,ext};
+use ash::extensions::{ext, khr};
 
 use ash::version::{EntryV1_0, InstanceV1_0};
 use ash::vk;
@@ -12,14 +12,16 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
 use std::ptr;
 
-use crate::debug::{check_validation_layer_support, ValidationInfo, VALIDATION, setup_debug_messenger, destroy_debug_messenger, populate_debug_messenger_create_info};
+use crate::debug::{
+    check_validation_layer_support, destroy_debug_messenger, populate_debug_messenger_create_info,
+    setup_debug_messenger, ValidationInfo, VALIDATION,
+};
 
 pub struct Core {
     window: winit::window::Window,
     entry: Entry,
     instance: ash::Instance,
     debug_utils_messenger: Option<vk::DebugUtilsMessengerEXT>,
-
 }
 
 impl Core {
@@ -42,7 +44,6 @@ impl Core {
                 window,
                 instance,
                 entry,
-              
             },
             event_loop,
         )
@@ -84,7 +85,7 @@ impl Core {
 
             enabled_extension_count: required_extensions.len() as u32,
             pp_enabled_extension_names: required_extensions.as_ptr(),
-            
+
             pp_enabled_layer_names: if VALIDATION.is_enable {
                 enable_layer_names.as_ptr()
             } else {
@@ -95,16 +96,17 @@ impl Core {
             } else {
                 0
             } as u32,
-            p_next : if VALIDATION.is_enable {
-                &populate_debug_messenger_create_info() 
-                as *const vk::DebugUtilsMessengerCreateInfoEXT 
-                as *const c_void
+            p_next: if VALIDATION.is_enable {
+                &populate_debug_messenger_create_info()
+                    as *const vk::DebugUtilsMessengerCreateInfoEXT as *const c_void
             } else {
                 ptr::null()
             },
             ..Default::default()
         };
-        let instance = unsafe { entry.create_instance(&create_info, None).unwrap() };
+        let instance = unsafe { 
+            entry.create_instance(&create_info, None).unwrap() 
+        };
         instance
     }
 
@@ -151,7 +153,7 @@ impl Core {
 impl Drop for Core {
     fn drop(&mut self) {
         unsafe {
-            destroy_debug_messenger(&self.entry,&self.instance,self.debug_utils_messenger);
+            destroy_debug_messenger(&self.entry, &self.instance, self.debug_utils_messenger);
             self.instance.destroy_instance(None);
         }
     }
