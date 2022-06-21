@@ -22,6 +22,7 @@ pub struct Core {
     entry: Entry,
     instance: ash::Instance,
     debug_utils_messenger: Option<vk::DebugUtilsMessengerEXT>,
+    physical_device: vk::PhysicalDevice,
 }
 
 impl Core {
@@ -108,6 +109,25 @@ impl Core {
             entry.create_instance(&create_info, None).unwrap() 
         };
         instance
+    }
+    fn pick_pyhsical_device() {
+        let physical_devices = ash::vk::PhysicalDevice::enumerate(&self.instance).unwrap();
+        if(physical_devices.len() == 0) {
+            panic!("failed to find GPUs with Vulkan support!");
+        }
+        for physical_device in physical_devices.iter(){
+            if self.is_device_suitable(physical_device) {
+                self.physical_device = *physical_device;
+                return
+            }
+        }
+        if(self.physical_device == vk::PhysicalDevice::null()) {
+            panic!("failed to find a suitable GPU!");
+        }
+    }
+    fn is_device_suitable(physical_device : &vk::PhysicalDevice)->bool{
+
+        true
     }
 
     fn burn_frame(&self) {}
