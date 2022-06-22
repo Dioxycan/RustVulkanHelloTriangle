@@ -1,9 +1,11 @@
 mod core;
+mod instance;
 mod debug;
 mod physical_device;
 mod queue;
-mod logical_device;
-
+mod logical_device; 
+mod surface;
+mod swapchain;
 use crate::core::Core;
 
 fn main() {

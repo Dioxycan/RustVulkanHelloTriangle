@@ -4,26 +4,32 @@ use std::default::Default;
 
 pub struct QueueFamilyIndices {
     pub graphics_family: Option<u32>,
+    pub present_family: Option<u32>,
 }
-impl QueueFamilyIndices{
+impl QueueFamilyIndices {
     pub fn is_complete(&self) -> bool {
-        self.graphics_family.is_some()
+        self.graphics_family.is_some() && self.present_family.is_some()
+    }
+    pub fn iter(&self) -> impl Iterator<Item = u32> {
+        vec![self.graphics_family.unwrap(), self.present_family.unwrap()].into_iter()
     }
 }
 impl Default for QueueFamilyIndices {
     fn default() -> Self {
         QueueFamilyIndices {
             graphics_family: None,
+            present_family: None,
         }
     }
 }
 
-
-
 pub fn find_queue_families(
     instance: &ash::Instance,
-    physical_device:& vk::PhysicalDevice,
+    physical_device: &vk::PhysicalDevice,
+    surface: &vk::SurfaceKHR,
 ) -> QueueFamilyIndices {
+    let entry = ash::Entry::new().unwrap();
+    let surface_loader = ash::extensions::khr::Surface::new(&entry,instance);
     let mut indices = QueueFamilyIndices {
         ..Default::default()
     };
@@ -31,11 +37,19 @@ pub fn find_queue_families(
         unsafe { instance.get_physical_device_queue_family_properties(*physical_device) };
 
     for (i, queue_family) in queue_families.iter().enumerate() {
-        if queue_family.queue_count > 0
-            && queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-        {
-            indices.graphics_family = Some(i as u32);
-        };
+        if queue_family.queue_count > 0 {
+            if queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
+                indices.graphics_family = Some(i as u32);
+            } else if unsafe {
+                surface_loader.get_physical_device_surface_support(
+                    *physical_device,
+                    i as u32,
+                    *surface,
+                )
+            }{
+                indices.present_family = Some(i as u32);
+            }
+        }
     }
     indices
 }

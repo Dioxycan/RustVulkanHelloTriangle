@@ -1,32 +1,34 @@
 use winit;
 
-use ash::extensions::{ext, khr};
-
-use ash::version::{EntryV1_0, InstanceV1_0,DeviceV1_0};
+use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-use ash::vk_make_version;
+
 use ash::Entry;
 
-use std::default::Default;
-use std::ffi::{CStr, CString};
-use std::os::raw::c_void;
-use std::ptr;
-
-use crate::debug::{
-    check_validation_layer_support, destroy_debug_messenger, populate_debug_messenger_create_info,
-    setup_debug_messenger, ValidationInfo, VALIDATION,
-};
-use crate::physical_device::pick_pyhsical_device;
+use crate::debug::{destroy_debug_messenger, setup_debug_messenger};
+use crate::instance::create_instance;
 use crate::logical_device::create_logical_device;
+use crate::physical_device::pick_pyhsical_device;
 use crate::queue;
+use crate::surface::create_surface;
+use crate::swapchain::create_swap_chain;
 pub struct Core {
     window: winit::window::Window,
     entry: Entry,
     instance: ash::Instance,
+    surface: vk::SurfaceKHR,
+    surface_loader: ash::extensions::khr::Surface,
     debug_utils_messenger: Option<vk::DebugUtilsMessengerEXT>,
     physical_device: vk::PhysicalDevice,
-    device : ash::Device,
+    device: ash::Device,
     graphics_queue: vk::Queue,
+    present_queue: vk::Queue,
+    swap_chain: vk::SwapchainKHR,
+    swap_chain_loader: ash::extensions::khr::Swapchain,
+    swap_chain_images: Vec<vk::Image>,
+    swap_chain_image_format: vk::Format,
+    swap_chain_extent: vk::Extent2D,
+    swap_chain_image_views: Vec<vk::ImageView>,
 }
 
 impl Core {
@@ -43,96 +45,56 @@ impl Core {
             .unwrap();
 
         let entry = Entry::new().unwrap();
-        let instance = Core::create_instance(&entry);
-        let physical_device = pick_pyhsical_device(&instance);
-        let device = create_logical_device(&instance, &physical_device);
-        let indicies = queue::find_queue_families(&instance, &physical_device);
+        let instance = create_instance(&entry);
+        let surface = unsafe { create_surface(&entry, &instance, &window).expect("") };
+        let surface_loader = ash::extensions::khr::Surface::new(&entry, &instance);
+        let physical_device = pick_pyhsical_device(&instance, &surface);
+        let device = create_logical_device(&instance, &physical_device, &surface);
+        let indicies = queue::find_queue_families(&instance, &physical_device, &surface);
         let graphics_queue = match indicies.graphics_family {
-            Some(graphics_family) => {
-               unsafe {
-                device
-                .get_device_queue(graphics_family, 0)
-               }
+            Some(graphics_family) => unsafe { 
+                device.get_device_queue(graphics_family, 0) },
+            None => {
+                panic!("Failed to find a suitable queue family");
             }
+        };
+        let present_queue = match indicies.present_family {
+            Some(present_family) => unsafe { device.get_device_queue(present_family, 0) },
             None => {
                 panic!("Failed to find a suitable queue family");
             }
         };
         let debug_utils_messenger = setup_debug_messenger(&entry, &instance);
+        let (
+            swap_chain,
+            swap_chain_loader,
+            swap_chain_images,
+            swap_chain_image_format,
+            swap_chain_extent,
+            swap_chain_image_views,
+        ) = create_swap_chain(&instance, &device, &physical_device, &surface, &window);
+
         (
             Core {
                 window,
                 entry,
                 instance,
+                surface,
+                surface_loader,
                 debug_utils_messenger,
                 physical_device,
                 device,
                 graphics_queue,
-
+                present_queue,
+                swap_chain,
+                swap_chain_loader,
+                swap_chain_images,
+                swap_chain_image_format,
+                swap_chain_extent,
+                swap_chain_image_views,
             },
             event_loop,
         )
-    }
-    fn create_instance(entry: &Entry) -> ash::Instance {
-        if VALIDATION.is_enable && check_validation_layer_support(entry) == false {
-            panic!("Validation layers requested, but not available!");
-        }
-
-        let app_name = CString::new("Hello").unwrap();
-        let engine_name = CString::new("Engine").unwrap();
-        let app_info = vk::ApplicationInfo {
-            application_version: vk_make_version!(1, 0, 0),
-            p_application_name: app_name.as_ptr(),
-            engine_version: vk_make_version!(1, 0, 0),
-            p_engine_name: engine_name.as_ptr(),
-            api_version: vk_make_version!(1, 0, 0),
-            ..Default::default()
-        };
-
-        let required_extensions: Vec<*const i8> = vec![
-            khr::Surface::name().as_ptr(),
-            khr::Win32Surface::name().as_ptr(),
-            ext::DebugUtils::name().as_ptr(),
-        ];
-
-        let requred_validation_layer_raw_names: Vec<CString> = VALIDATION
-            .required_validation_layers
-            .iter()
-            .map(|layer_name| CString::new(*layer_name).unwrap())
-            .collect();
-        let enable_layer_names: Vec<*const i8> = requred_validation_layer_raw_names
-            .iter()
-            .map(|layer_name| layer_name.as_ptr())
-            .collect();
-
-        let create_info = vk::InstanceCreateInfo {
-            p_application_info: &app_info,
-
-            enabled_extension_count: required_extensions.len() as u32,
-            pp_enabled_extension_names: required_extensions.as_ptr(),
-
-            pp_enabled_layer_names: if VALIDATION.is_enable {
-                enable_layer_names.as_ptr()
-            } else {
-                ptr::null()
-            },
-            enabled_layer_count: if VALIDATION.is_enable {
-                enable_layer_names.len()
-            } else {
-                0
-            } as u32,
-            p_next: if VALIDATION.is_enable {
-                &populate_debug_messenger_create_info()
-                    as *const vk::DebugUtilsMessengerCreateInfoEXT as *const c_void
-            } else {
-                ptr::null()
-            },
-            ..Default::default()
-        };
-        let instance = unsafe { 
-            entry.create_instance(&create_info, None).unwrap() 
-        };
-        instance
     }
 
     fn burn_frame(&self) {}
@@ -178,7 +140,15 @@ impl Core {
 impl Drop for Core {
     fn drop(&mut self) {
         unsafe {
+            for view in self.swap_chain_image_views.iter() {
+                self.device.destroy_image_view(*view, None);
+            }
+            self.swap_chain_loader
+                .destroy_swapchain(self.swap_chain, None);
+            self.device.destroy_device(None);
+            self.surface_loader.destroy_surface(self.surface, None);
             destroy_debug_messenger(&self.entry, &self.instance, self.debug_utils_messenger);
+
             self.instance.destroy_instance(None);
         }
     }

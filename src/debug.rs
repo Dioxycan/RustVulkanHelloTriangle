@@ -77,14 +77,17 @@ pub unsafe extern "system" fn debug_utils_callback(
     vk::FALSE
 }
 pub fn populate_debug_messenger_create_info() -> vk::DebugUtilsMessengerCreateInfoEXT {
-        vk::DebugUtilsMessengerCreateInfoEXT{
-            message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::all(),
-            message_type: vk::DebugUtilsMessageTypeFlagsEXT::all(),
-            pfn_user_callback: Some(debug_utils_callback),
-            p_user_data: ptr::null_mut(),
-            ..Default::default()
-        }
+    vk::DebugUtilsMessengerCreateInfoEXT {
+        message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
+            | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING,
+        message_type: vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+            | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+            | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
+        pfn_user_callback: Some(debug_utils_callback),
+        p_user_data: ptr::null_mut(),
+        ..Default::default()
     }
+}
 pub fn setup_debug_messenger(
     entry: &ash::Entry,
     instance: &ash::Instance,
