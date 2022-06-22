@@ -12,6 +12,7 @@ use crate::physical_device::pick_pyhsical_device;
 use crate::queue;
 use crate::surface::create_surface;
 use crate::swapchain::create_swap_chain;
+use crate::pipeline::Pipeline;
 pub struct Core {
     window: winit::window::Window,
     entry: Entry,
@@ -29,6 +30,7 @@ pub struct Core {
     swap_chain_image_format: vk::Format,
     swap_chain_extent: vk::Extent2D,
     swap_chain_image_views: Vec<vk::ImageView>,
+    pipeline: Pipeline,
 }
 
 impl Core {
@@ -73,7 +75,11 @@ impl Core {
             swap_chain_extent,
             swap_chain_image_views,
         ) = create_swap_chain(&instance, &device, &physical_device, &surface, &window);
-
+        let pipeline = Pipeline::new(
+            "src/shaders/simple_shader.vert.spv",
+            "src/shaders/simple_shader.frag.spv",
+        );
+        pipeline.create_graphic_pipeline();
         (
             Core {
                 window,
@@ -92,6 +98,7 @@ impl Core {
                 swap_chain_image_format,
                 swap_chain_extent,
                 swap_chain_image_views,
+                pipeline,
             },
             event_loop,
         )

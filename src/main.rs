@@ -6,6 +6,7 @@ mod queue;
 mod logical_device; 
 mod surface;
 mod swapchain;
+mod pipeline;
 use crate::core::Core;
 
 fn main() {
