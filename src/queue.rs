@@ -36,20 +36,17 @@ pub fn find_queue_families(
     let queue_families =
         unsafe { instance.get_physical_device_queue_family_properties(*physical_device) };
 
-    for (i, queue_family) in queue_families.iter().enumerate() {
-        if queue_family.queue_count > 0 {
-            if queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
+        for (i,queue_family) in queue_families.iter().enumerate(){
+            if queue_family.queue_count > 0 && queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
                 indices.graphics_family = Some(i as u32);
-            } else if unsafe {
-                surface_loader.get_physical_device_surface_support(
-                    *physical_device,
-                    i as u32,
-                    *surface,
-                )
-            }{
+            }
+            let is_present_support = unsafe {surface_loader.get_physical_device_surface_support(*physical_device,i as u32,*surface)};
+            if is_present_support {
                 indices.present_family = Some(i as u32);
             }
+            if indices.is_complete() {
+                break;
+            }
         }
-    }
     indices
 }

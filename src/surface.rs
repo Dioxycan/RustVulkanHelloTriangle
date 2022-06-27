@@ -1,8 +1,20 @@
 use ash::version::{EntryV1_0,InstanceV1_0};
 use ash::vk;
-use ash::extensions::khr;
+use winit;
+use ash::extensions::{ext, khr};
+// pub struct Surface{
+//     surface:ash::vk::SurfaceKHR,
+//     surface_loader: ash::extensions::khr::Surface,
 
-pub unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
+// }
+pub struct SurfaceStuff {
+    pub surface_loader: ash::extensions::khr::Surface,
+    pub surface: vk::SurfaceKHR,
+
+    pub screen_width: u32,
+    pub screen_height: u32,
+}
+pub unsafe fn create_surface_a<E: EntryV1_0, I: InstanceV1_0>(
     entry: &E,
     instance: &I,
     window: &winit::window::Window,
@@ -24,4 +36,24 @@ pub unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
     };
     let win32_surface_loader = khr::Win32Surface::new(entry, instance);
     win32_surface_loader.create_win32_surface(&win32_create_info, None)
+}
+
+pub fn create_surface(
+    entry: &ash::Entry,
+    instance: &ash::Instance,
+    window: &winit::window::Window,
+    screen_width: u32,
+    screen_height: u32,
+) -> SurfaceStuff {
+    let surface = unsafe {
+        create_surface_a(entry, instance, window).expect("Failed to create surface.")
+    };
+    let surface_loader = ash::extensions::khr::Surface::new(entry, instance);
+
+    SurfaceStuff {
+        surface_loader,
+        surface,
+        screen_width,
+        screen_height,
+    }
 }
