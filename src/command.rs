@@ -1,8 +1,13 @@
-use ash::vk;
-use ash::version::{DeviceV1_0};
-use std::ptr;
 use crate::queue::find_queue_families;
-pub fn create_command_pool(instance:&ash::Instance,physical_device:&vk::PhysicalDevice,device:&ash::Device,surface:&vk::SurfaceKHR)->vk::CommandPool {
+use ash::version::DeviceV1_0;
+use ash::vk;
+use std::ptr;
+pub fn create_command_pool(
+    instance: &ash::Instance,
+    physical_device: &vk::PhysicalDevice,
+    device: &ash::Device,
+    surface: &vk::SurfaceKHR,
+) -> vk::CommandPool {
     let queue_family_indices = find_queue_families(instance, &physical_device, &surface);
     let command_pool_create_info = vk::CommandPoolCreateInfo {
         s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
@@ -78,7 +83,7 @@ pub fn create_command_buffers(
         s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
         p_next: ptr::null(),
         command_buffer_count: framebuffers.len() as u32,
-        command_pool:*command_pool,
+        command_pool: *command_pool,
         level: vk::CommandBufferLevel::PRIMARY,
     };
 
@@ -90,10 +95,7 @@ pub fn create_command_buffers(
 
     for (i, &command_buffer) in command_buffers.iter().enumerate() {
         let command_buffer_begin_info = vk::CommandBufferBeginInfo {
-            s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
-            p_next: ptr::null(),
-            p_inheritance_info: ptr::null(),
-            flags: vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
+            ..Default::default()
         };
 
         unsafe {
@@ -102,15 +104,20 @@ pub fn create_command_buffers(
                 .expect("Failed to begin recording Command Buffer at beginning!");
         }
 
-        let clear_values = [vk::ClearValue {
+        let clear_values = [
+            vk::ClearValue {
             color: vk::ClearColorValue {
                 float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        }];
+            }},
+            vk::ClearValue{
+                depth_stencil: vk::ClearDepthStencilValue{
+                    depth: 1.0,
+                    stencil: 0
+                }
+            }
+        ];
 
         let render_pass_begin_info = vk::RenderPassBeginInfo {
-            s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
-            p_next: ptr::null(),
             render_pass: *render_pass,
             framebuffer: framebuffers[i],
             render_area: vk::Rect2D {
@@ -119,6 +126,7 @@ pub fn create_command_buffers(
             },
             clear_value_count: clear_values.len() as u32,
             p_clear_values: clear_values.as_ptr(),
+            ..Default::default()
         };
 
         unsafe {

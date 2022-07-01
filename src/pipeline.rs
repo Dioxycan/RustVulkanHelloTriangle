@@ -10,7 +10,7 @@ pub fn create_render_pass(
         format: swap_chain_image_format,
         samples: vk::SampleCountFlags::TYPE_1,
         load_op: vk::AttachmentLoadOp::CLEAR,
-        store_op: vk::AttachmentStoreOp::STORE,
+        store_op: vk::AttachmentStoreOp::DONT_CARE,
         stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
         stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
         initial_layout: vk::ImageLayout::UNDEFINED,
@@ -25,6 +25,7 @@ pub fn create_render_pass(
     let subpass = vk::SubpassDescription {
         pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
         p_color_attachments: &color_attachment_ref,
+        color_attachment_count:1,
         ..Default::default()
     };
     let subpass_dependency = vk::SubpassDependency {

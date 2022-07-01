@@ -1,7 +1,7 @@
 use ash::version::InstanceV1_0;
 use ash::vk;
 use std::default::Default;
-
+use std::collections::HashSet;
 pub struct QueueFamilyIndices {
     pub graphics_family: Option<u32>,
     pub present_family: Option<u32>,
@@ -12,6 +12,12 @@ impl QueueFamilyIndices {
     }
     pub fn iter(&self) -> impl Iterator<Item = u32> {
         vec![self.graphics_family.unwrap(), self.present_family.unwrap()].into_iter()
+    }
+    pub fn into_unique(&self) -> HashSet<u32> {
+        let mut unique_queue_families = HashSet::new();
+        unique_queue_families.insert(self.graphics_family.unwrap());
+        unique_queue_families.insert(self.present_family.unwrap());
+        unique_queue_families
     }
 }
 impl Default for QueueFamilyIndices {

@@ -1,5 +1,5 @@
-use winit;
 use ash::version::DeviceV1_0;
+use winit;
 
 use crate::command::{create_command_buffers, create_command_pool};
 use crate::debug::{destroy_debug_messenger, setup_debug_messenger};
@@ -10,12 +10,12 @@ use crate::physical_device::pick_pyhsical_device;
 use crate::pipeline::{create_graphic_pipeline, create_render_pass};
 use crate::queue;
 use crate::surface::create_surface;
-use crate::swapchain::{create_swapchain, create_image_views};
-use ash::version::{InstanceV1_0};
+use crate::swapchain::{create_image_views, create_swapchain};
+use ash::version::InstanceV1_0;
 use ash::vk;
 use ash::Entry;
 use std::ptr;
-const MAX_FRAMES_IN_FLIGHT: usize = 1;
+const MAX_FRAMES_IN_FLIGHT: usize = 2;
 struct SyncObjects {
     image_available_semaphores: Vec<vk::Semaphore>,
     render_finished_semaphores: Vec<vk::Semaphore>,
@@ -49,10 +49,11 @@ pub struct Core {
     render_pass: vk::RenderPass,
     frame_buffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: Vec<vk::CommandBuffer>,
     image_available_semaphores: Vec<vk::Semaphore>,
     render_finished_semaphores: Vec<vk::Semaphore>,
     in_flight_fences: Vec<vk::Fence>,
+    image_in_flight: Vec<vk::Fence>,
     current_frame: usize,
 }
 
@@ -70,7 +71,7 @@ impl Core {
 
         let entry = ash::Entry::new().unwrap();
         let instance = create_instance(&entry);
-        let surface = unsafe { create_surface(&entry, &instance, &window,1024,768) };
+        let surface = unsafe { create_surface(&entry, &instance, &window, 1024, 768) };
         let surface_loader = ash::extensions::khr::Surface::new(&entry, &instance);
         let physical_device = pick_pyhsical_device(&instance, &surface);
         let device = create_logical_device(&instance, &physical_device, &surface.surface);
@@ -88,22 +89,30 @@ impl Core {
             }
         };
         let debug_utils_messenger = setup_debug_messenger(&entry, &instance);
-        let swapchain_stuff = create_swapchain(&instance, &device, physical_device, &window,&surface,&indicies );
+        let swapchain_stuff = create_swapchain(
+            &instance,
+            &device,
+            physical_device,
+            &window,
+            &surface,
+            &indicies,
+        );
         let render_pass = create_render_pass(&device, swapchain_stuff.swapchain_format);
         let (pipeline, pipeline_layout) =
             create_graphic_pipeline(&device, &swapchain_stuff.swapchain_extent, &render_pass);
-            let swapchain_image_views = create_image_views(
-                &device,
-                swapchain_stuff.swapchain_format,
-                &swapchain_stuff.swapchain_images,
-            );
+        let swapchain_image_views = create_image_views(
+            &device,
+            swapchain_stuff.swapchain_format,
+            &swapchain_stuff.swapchain_images,
+        );
         let frame_buffers = create_framebuffer(
             &device,
             &swapchain_image_views,
             &render_pass,
             &swapchain_stuff.swapchain_extent,
         );
-        let command_pool = create_command_pool(&instance, &physical_device, &device, &surface.surface);
+        let command_pool =
+            create_command_pool(&instance, &physical_device, &device, &surface.surface);
         let command_buffer = create_command_buffers(
             &device,
             &command_pool,
@@ -111,32 +120,31 @@ impl Core {
             &frame_buffers,
             &render_pass,
             &swapchain_stuff.swapchain_extent,
-        )[0];
+        );
         let sync_ojbects = Core::create_sync_objects(&device);
-
-
 
         (
             Core {
                 image_available_semaphores: sync_ojbects.image_available_semaphores,
                 render_finished_semaphores: sync_ojbects.render_finished_semaphores,
                 in_flight_fences: sync_ojbects.inflight_fences,
+                image_in_flight: vec![vk::Fence::null(); swapchain_stuff.swapchain_images.len()],
                 window,
                 entry,
                 instance,
-                surface:surface.surface,
-                surface_loader:surface.surface_loader,
+                surface: surface.surface,
+                surface_loader: surface.surface_loader,
                 debug_utils_messenger,
                 physical_device,
                 device,
                 graphics_queue,
                 present_queue,
-                swap_chain:swapchain_stuff.swapchain,
-                swap_chain_loader:swapchain_stuff.swapchain_loader,
-                swap_chain_images:swapchain_stuff.swapchain_images,
-                swap_chain_image_format:swapchain_stuff.swapchain_format,
-                swap_chain_extent:swapchain_stuff.swapchain_extent,
-                swap_chain_image_views:swapchain_image_views,
+                swap_chain: swapchain_stuff.swapchain,
+                swap_chain_loader: swapchain_stuff.swapchain_loader,
+                swap_chain_images: swapchain_stuff.swapchain_images,
+                swap_chain_image_format: swapchain_stuff.swapchain_format,
+                swap_chain_extent: swapchain_stuff.swapchain_extent,
+                swap_chain_image_views: swapchain_image_views,
                 pipeline,
                 pipeline_layout,
                 render_pass,
@@ -199,7 +207,8 @@ impl Core {
             self.device
                 .wait_for_fences(&wait_fences, true, std::u64::MAX)
                 .expect("Failed to wait for Fence!");
-            let ok =self.swap_chain_loader
+            let ok = self
+                .swap_chain_loader
                 .acquire_next_image(
                     self.swap_chain,
                     std::u64::MAX,
@@ -207,58 +216,60 @@ impl Core {
                     vk::Fence::null(),
                 )
                 .expect("Failed to acquire next image.");
-                ok
+            ok
         };
-
+        if (self.image_in_flight[image_index as usize] != vk::Fence::null()) {
+            unsafe {
+                self.device
+                    .wait_for_fences(&wait_fences, true, std::u64::MAX)
+                    .expect("Failed to wait for Fence!");
+            }
+        }
+        self.image_in_flight[image_index as usize] = self.in_flight_fences[self.current_frame];
         let wait_semaphores = [self.image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let signal_semaphores = [self.render_finished_semaphores[self.current_frame]];
 
         let submit_infos = [vk::SubmitInfo {
-            s_type: vk::StructureType::SUBMIT_INFO,
-            p_next: ptr::null(),
             wait_semaphore_count: wait_semaphores.len() as u32,
             p_wait_semaphores: wait_semaphores.as_ptr(),
             p_wait_dst_stage_mask: wait_stages.as_ptr(),
             command_buffer_count: 1,
-            p_command_buffers: &self.command_buffer,
+            //[TODO] change to command buffer
+            p_command_buffers: &self.command_buffer[image_index as usize],
             signal_semaphore_count: signal_semaphores.len() as u32,
             p_signal_semaphores: signal_semaphores.as_ptr(),
+            ..Default::default()
         }];
         unsafe {
             self.device
-                .reset_fences(&wait_fences)
+                .reset_fences(&[self.in_flight_fences[self.current_frame]])
                 .expect("Failed to reset Fence!");
 
-            let ok = self.device
-                .queue_submit(
-                    self.graphics_queue,
-                    &submit_infos,
-                    self.in_flight_fences[self.current_frame],
-                );
-
+            let ok = self.device.queue_submit(
+                self.graphics_queue,
+                &submit_infos,
+                self.in_flight_fences[self.current_frame],
+            );
         }
 
         let swapchains = [self.swap_chain];
 
         let present_info = vk::PresentInfoKHR {
-            s_type: vk::StructureType::PRESENT_INFO_KHR,
-            p_next: ptr::null(),
             wait_semaphore_count: 1,
             p_wait_semaphores: signal_semaphores.as_ptr(),
             swapchain_count: 1,
             p_swapchains: swapchains.as_ptr(),
             p_image_indices: &image_index,
-            p_results: ptr::null_mut(),
+            ..Default::default()
         };
         unsafe {
-            let ok =self.swap_chain_loader
+            let ok = self
+                .swap_chain_loader
                 .queue_present(self.present_queue, &present_info)
                 .expect("Failed to execute queue present.");
-           // println!("{:?}", ok);
         }
-        self.
-        current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
     pub fn burn((mut core, event_loop): (Self, winit::event_loop::EventLoop<()>)) {

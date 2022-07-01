@@ -8,18 +8,19 @@ use crate::physical_device::physical_device_extensions;
 use std::default::Default;
 use std::ffi::CString;
 use std::ptr;
-
+use std::collections::HashSet;
 pub fn create_logical_device(
     instance: &ash::Instance,
     physical_device: &vk::PhysicalDevice,
     surface: &vk::SurfaceKHR,
 ) -> ash::Device {
     let indices = find_queue_families(instance, physical_device, surface);
+    let unique_queue_families= indices.into_unique();
     let mut queue_create_infos :Vec<vk::DeviceQueueCreateInfo> = vec![];
     let queue_priority = 1.0f32;
-    for (_i, queue_family) in indices.iter().enumerate() {
+    for (_i, queue_family) in unique_queue_families.iter().enumerate() {
         let queue_create_info = vk::DeviceQueueCreateInfo{
-            queue_family_index: queue_family,
+            queue_family_index: queue_family.clone(),
             queue_count: 1,
             p_queue_priorities: &queue_priority,
             ..Default::default()
