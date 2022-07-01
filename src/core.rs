@@ -278,12 +278,11 @@ impl Core {
             match event {
                 winit::event::Event::WindowEvent { event, .. } => match event {
                     winit::event::WindowEvent::CloseRequested => {
-                        println!("CloseRequested");
                         unsafe {
                             core.device
                                 .device_wait_idle()
                                 .expect("Failed to wait device idle.");
-                        }
+                        };
                         *control_flow = winit::event_loop::ControlFlow::Exit;
                     }
                     winit::event::WindowEvent::KeyboardInput { input, .. } => match input {
@@ -297,7 +296,11 @@ impl Core {
                                 winit::event::ElementState::Pressed,
                             ) => {
                                 dbg!();
-
+                                unsafe {
+                                    core.device
+                                        .device_wait_idle()
+                                        .expect("Failed to wait device idle.");
+                                };
                                 *control_flow = winit::event_loop::ControlFlow::Exit;
                             }
                             _ => {}
@@ -314,6 +317,7 @@ impl Core {
                 _ => (),
             }
         });
+
     }
 }
 
